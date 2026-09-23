@@ -23,6 +23,15 @@
 #define OPENSSL_RAND_TRUSTY
 #elif defined(OPENSSL_WINDOWS)
 #define OPENSSL_RAND_WINDOWS
+#elif defined(__vita__)
+// Before the OPENSSL_LINUX branch, which this target would otherwise take and
+// which is fatal here: urandom.cc reaches entropy via syscall(__NR_getrandom)
+// and abort()s unless that either works or reports ENOSYS with a readable
+// /dev/urandom. A Vita has no syscall(2), no __NR_getrandom, and no /dev at
+// all, so it takes the abort -- silently, since the perror alongside it goes
+// to a stderr nothing is reading. That is a process death at first handshake
+// with no diagnostic whatsoever.
+#define OPENSSL_RAND_VITA
 #elif defined(OPENSSL_LINUX)
 #define OPENSSL_RAND_URANDOM
 #elif defined(OPENSSL_APPLE) && !defined(OPENSSL_MACOS)

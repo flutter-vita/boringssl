@@ -147,3 +147,39 @@ void bssl::CRYPTO_sysrand(uint8_t *out, size_t len) {
 }
 
 #endif  // OPENSSL_RAND_URANDOM
+
+// The Vita entropy backend.
+//
+// It lives in urandom.cc rather than a vita.cc beside trusty.cc and windows.cc
+// purely so the source list does not have to change: BoringSSL's file list in
+// the engine is generated, and a new file there is a diff that regeneration
+// erases. This file is already compiled for every target, its body gated by
+// macro, so a second gated body costs nothing and survives.
+#if defined(OPENSSL_RAND_VITA)
+
+#include <psp2/kernel/rng.h>
+#include <stdlib.h>
+
+using namespace bssl;
+
+void bssl::CRYPTO_init_sysrand() {}
+
+void bssl::CRYPTO_sysrand(uint8_t *out, size_t requested) {
+  // sceKernelGetRandomNumber is the kernel CSPRNG and takes at most 64 bytes
+  // per call, so the request is chunked. Anything larger fails the whole call
+  // rather than returning short, which would be an entropy bug of the quiet,
+  // catastrophic kind.
+  static const size_t kMaxChunk = 64;
+  while (requested > 0) {
+    size_t todo = requested < kMaxChunk ? requested : kMaxChunk;
+    if (sceKernelGetRandomNumber(out, static_cast<unsigned int>(todo)) < 0) {
+      // Matching every other backend: BoringSSL treats an entropy failure as
+      // unrecoverable rather than degrading to a weaker source, and so do we.
+      abort();
+    }
+    out += todo;
+    requested -= todo;
+  }
+}
+
+#endif  // OPENSSL_RAND_VITA
